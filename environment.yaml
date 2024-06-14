@@ -1,0 +1,13 @@
+name: Aroma
+channels:
+  - defaults
+  - conda-forge
+dependencies:
+  - python=3.11.7
+  - jupyter
+  - pandas
+  - numpy
+  - requests
+  - beautifulsoup4
+  - selenium
+  - lxml
