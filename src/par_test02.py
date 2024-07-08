@@ -1,108 +1,147 @@
-import requests
-from bs4 import BeautifulSoup
-import csv
+import json
+import time
+import os
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+import undetected_chromedriver as uc
 
-# Encabezados para imitar una solicitud del navegador
-headers = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3"
-}
+# Función para inicializar el driver con undetected-chromedriver
+def init_driver():
+    options = uc.ChromeOptions()
+    # options.add_argument("--headless")  # Ejecutar Chrome sin interfaz gráfica (comentado para ver la ejecución)
+    options.add_argument("--no-sandbox")
+    options.add_argument("--disable-dev-shm-usage")
+    options.binary_location = 'C:/chrome-win64/chrome.exe'  # Actualiza esta ruta según sea necesario
+    driver = uc.Chrome(driver_executable_path='C:/chromedriver/chromedriver.exe', options=options)
+    return driver
 
-# Rutas de archivo
-perfume_links_file = "cleaned_par_link_per.txt"
-output_csv_file = "par_per_datos.csv"
-
-# Leer los enlaces de perfumes del archivo
-def read_perfume_links():
-    with open(perfume_links_file, "r") as file:
-        return [line.strip() for line in file.readlines()]
-
-# Scraping de la información del perfume
-def scrape_perfume_data(perfume_url):
-    base_url = "https://www.parfumo.com"
-    full_url = perfume_url if perfume_url.startswith("http") else f"{base_url}{perfume_url}"
-    response = requests.get(full_url, headers=headers)
-    soup = BeautifulSoup(response.content, "html.parser")
-
+# Función para extraer datos del perfume
+def extract_perfume_data(driver, url):
+    driver.get(url)
+    perfume_data = {}
     try:
-        name_element = soup.select_one("#pd_inf > div.cb.pt-1 > main > div.p_details_holder > h1")
-        brand_element = soup.select_one("#pd_inf > div.cb.pt-1 > main > div.p_details_holder > h1 > span > span > a:nth-child(1) > span")
-        release_year_element = soup.select_one("#pd_inf > div.cb.pt-1 > main > div.p_details_holder > h1 > span > span > a:nth-child(2) > span")
-        concentration_element = soup.select_one("#pd_inf > div.cb.pt-1 > main > div.p_details_holder > h1 > span > span > span")
-        rating_value_element = soup.select_one("#pd_inf > div.cb.pt-1 > main > div.p_details_holder_second > div:nth-child(1) > span.ratingvalue")
-        rating_count_element = soup.select_one("#pd_inf > div.cb.pt-1 > main > div.p_details_holder_second > div:nth-child(1) > span.text-xs > span")
+        # Esperar y obtener el nombre
+        print("Buscando el nombre del perfume...")
+        name_element = WebDriverWait(driver, 10).until(
+            EC.presence_of_element_located((By.CSS_SELECTOR, '#toptop > h1'))
+        )
+        name = name_element.text if name_element else 'N/A'
+        print(f"Nombre: {name}")
 
-        main_accords_elements = soup.select("#pd_inf > div.cb.pt-1 > main > div.p_details_holder_second > div.mb-3.pointer > span > div > div.text-xs.grey")
-        top_notes_elements = soup.select("#pd_inf > div.cb.pt-1 > main > div.p_details_holder_second > div.notes_list.mb-2 > div.pyramid_block.nb_t.w-100.mt-2 > div.right > span > span")
-        middle_notes_elements = soup.select("#pd_inf > div.cb.pt-1 > main > div.p_details_holder_second > div.notes_list.mb-2 > div.pyramid_block.nb_m.w-100.mt-2 > div.right > span > span")
-        base_notes_elements = soup.select("#pd_inf > div.cb.pt-1 > main > div.p_details_holder_second > div.notes_list.mb-2 > div.pyramid_block.nb_b.w-100.mt-2 > div.right > span > span")
+        # Esperar y obtener el género
+        print("Buscando el género del perfume...")
+        gender_element = driver.find_element(By.CSS_SELECTOR, '#toptop > h1 > small')
+        gender = gender_element.text if gender_element else 'N/A'
+        print(f"Género: {gender}")
 
-        perfumers_elements = soup.select("div.w-100.mt-0-5.mb-3 > a")
+        # Esperar y obtener la valoración
+        print("Buscando la valoración del perfume...")
+        rating_value_element = driver.find_element(By.CSS_SELECTOR, '#main-content > div:nth-child(1) > div.small-12.medium-12.large-9.cell > div > div:nth-child(2) > div:nth-child(4) > div.small-12.medium-6.text-center > div > p.info-note > span:nth-child(1)')
+        rating_value = rating_value_element.text if rating_value_element else 'N/A'
+        print(f"Valoración: {rating_value}")
 
-        name = name_element.get_text(strip=True) if name_element else "N/A"
-        brand = brand_element.get_text(strip=True) if brand_element else "N/A"
-        release_year = release_year_element.get_text(strip=True) if release_year_element else "N/A"
-        concentration = concentration_element.get_text(strip=True) if concentration_element else "N/A"
-        rating_value = rating_value_element.get_text(strip=True) if rating_value_element else "N/A"
-        rating_count = rating_count_element.get_text(strip=True) if rating_count_element else "N/A"
+        # Esperar y obtener la cantidad de valoraciones
+        print("Buscando la cantidad de valoraciones del perfume...")
+        rating_count_element = driver.find_element(By.CSS_SELECTOR, '#main-content > div:nth-child(1) > div.small-12.medium-12.large-9.cell > div > div:nth-child(2) > div:nth-child(4) > div.small-12.medium-6.text-center > div > p.info-note > span:nth-child(3)')
+        rating_count = rating_count_element.text if rating_count_element else 'N/A'
+        print(f"Cantidad de valoraciones: {rating_count}")
 
-        main_accords = ", ".join([element.get_text(strip=True) for element in main_accords_elements]) if main_accords_elements else "N/A"
-        top_notes = ", ".join([element.get_text(strip=True) for element in top_notes_elements]) if top_notes_elements else "N/A"
-        middle_notes = ", ".join([element.get_text(strip=True) for element in middle_notes_elements]) if middle_notes_elements else "N/A"
-        base_notes = ", ".join([element.get_text(strip=True) for element in base_notes_elements]) if base_notes_elements else "N/A"
-        perfumers = ", ".join([element.get_text(strip=True) for element in perfumers_elements]) if perfumers_elements else "N/A"
+        # Esperar y obtener los principales acordes
+        print("Buscando los principales acordes del perfume...")
+        main_accords_elements = driver.find_elements(By.CSS_SELECTOR, '#main-content > div:nth-child(1) > div.small-12.medium-12.large-9.cell > div > div:nth-child(2) > div:nth-child(1) > div:nth-child(2) > div > div > div.accord-bar')
+        main_accords = [element.text for element in main_accords_elements]
+        print(f"Principales acordes: {main_accords}")
 
-        return {
-            "Name": name,
-            "Brand": brand,
-            "Release Year": release_year,
-            "Concentration": concentration,
-            "Rating Value": rating_value,
-            "Rating Count": rating_count,
-            "Main Accords": main_accords,
-            "Top Notes": top_notes,
-            "Middle Notes": middle_notes,
-            "Base Notes": base_notes,
-            "Perfumers": perfumers,
-            "URL": full_url
+        # Esperar y obtener los perfumistas
+        print("Buscando los perfumistas del perfume...")
+        perfumers_elements = driver.find_elements(By.CSS_SELECTOR, '#main-content > div:nth-child(1) > div.small-12.medium-12.large-9.cell > div > div:nth-child(3) > div.grid-x.grid-padding-x.grid-padding-y.small-up-2.medium-up-2 > div > a')
+        perfumers = [element.text for element in perfumers_elements]
+        print(f"Perfumistas: {perfumers}")
+
+        perfume_data = {
+            "Nombre": name,
+            "Género": gender,
+            "Valoración": rating_value,
+            "Cantidad de valoraciones": rating_count,
+            "Principales acordes": main_accords,
+            "Perfumistas": perfumers
         }
+
     except Exception as e:
-        print(f"Error scraping {full_url}: {e}")
-        return {
-            "Name": "N/A",
-            "Brand": "N/A",
-            "Release Year": "N/A",
-            "Concentration": "N/A",
-            "Rating Value": "N/A",
-            "Rating Count": "N/A",
-            "Main Accords": "N/A",
-            "Top Notes": "N/A",
-            "Middle Notes": "N/A",
-            "Base Notes": "N/A",
-            "Perfumers": "N/A",
-            "URL": full_url
+        print(f"Error extrayendo datos de {url}: {e}")
+        perfume_data = {
+            "Nombre": "Error",
+            "Género": "Error",
+            "Valoración": "Error",
+            "Cantidad de valoraciones": "Error",
+            "Principales acordes": "Error",
+            "Perfumistas": "Error"
         }
+    return perfume_data
 
-# Guardar los datos en un archivo CSV
-def save_to_csv(data):
-    with open(output_csv_file, mode='w', newline='', encoding='utf-8') as file:
-        writer = csv.DictWriter(file, fieldnames=["Name", "Brand", "Release Year", "Concentration", "Rating Value", "Rating Count", "Main Accords", "Top Notes", "Middle Notes", "Base Notes", "Perfumers", "URL"])
-        writer.writeheader()
-        for row in data:
-            writer.writerow(row)
+# Ruta de archivos
+base_dir = 'C:/Users/miufa/Aroma'
+src_dir = os.path.join(base_dir, 'src')
+data_dir = os.path.join(base_dir, 'data')
 
-def main():
-    perfume_links = read_perfume_links()
-    perfume_data = []
+# Verificar existencia de directorios y archivos
+if not os.path.exists(src_dir):
+    raise FileNotFoundError(f"El directorio src no existe: {src_dir}")
+if not os.path.exists(data_dir):
+    os.makedirs(data_dir)
 
-    # Limitar a los primeros 10 enlaces para la prueba
-    for perfume_url in perfume_links[:10]:
-        print(f"Scraping {perfume_url}...")
-        data = scrape_perfume_data(perfume_url)
-        perfume_data.append(data)
+links_file_path = os.path.join(src_dir, 'fra_per_links.txt')
+if not os.path.exists(links_file_path):
+    raise FileNotFoundError(f"El archivo de enlaces no existe: {links_file_path}")
 
-    save_to_csv(perfume_data)
-    print("Scraping completado. Datos guardados en par_per_datos.csv")
+# Cargar enlaces
+with open(links_file_path, 'r') as file:
+    perfume_links = file.readlines()
 
-if __name__ == "__main__":
-    main()
+# Iniciar driver
+driver = init_driver()
 
+# Archivos de salida y control
+output_file = os.path.join(data_dir, 'fra_datos_per.json')
+control_file = os.path.join(src_dir, 'control.txt')
+
+# Asegurarse de que el archivo de control tiene el comando correcto
+with open(control_file, 'w') as file:
+    file.write('continue')
+
+# Cargar progreso previo si existe
+if os.path.exists(output_file):
+    with open(output_file, 'r') as file:
+        perfume_data_list = json.load(file)
+else:
+    perfume_data_list = []
+
+# Iterar sobre todos los enlaces
+for i, link in enumerate(perfume_links):
+    link = link.strip()
+    perfume_data = extract_perfume_data(driver, link)
+    perfume_data_list.append(perfume_data)
+    
+    # Guardar datos después de cada iteración
+    with open(output_file, 'w') as file:
+        json.dump(perfume_data_list, file, indent=4, ensure_ascii=False)
+    
+    # Verificar archivo de control
+    if os.path.exists(control_file):
+        with open(control_file, 'r') as file:
+            control_command = file.read().strip()
+        print(f"Comando de control: {control_command}")
+        if control_command == 'pause':
+            print("Script paused")
+            while control_command == 'pause':
+                time.sleep(5)
+                with open(control_file, 'r') as file:
+                    control_command = file.read().strip()
+                print(f"Comando de control: {control_command}")
+        if control_command == 'abort':
+            print("Script aborted")
+            break
+
+# Cerrar driver
+driver.quit()
