@@ -2,10 +2,10 @@ import csv
 import os
 import random
 import json
+import time
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
 from bs4 import BeautifulSoup
-import time
 
 # Ruta al ChromeDriver (reemplaza con la ruta real en tu sistema)
 chrome_driver_path = 'C:\\chromedriver\\chromedriver.exe'
@@ -40,9 +40,34 @@ def extract_perfume_info(driver, url):
     rating_count = rating_count.replace("\n", "").strip()
     
     gender = soup.select_one('#facts > div > div > div:nth-child(6) > div.info-table-row__entry').text.strip() if soup.select_one('#facts > div > div > div:nth-child(6) > div.info-table-row__entry') else 'N/A'
-    country = soup.select_one('#facts > div > div > div:nth-child(5) > div.info-table-row__entry > span > a').text.strip() if soup.select_one('#facts > div > div > div:nth-child(5) > div.info-table-row__entry > span > a') else 'N/A'
-    
-    return [name, brand, type_, rating_value, rating_count, gender, country]
+    country = soup.select_one('#facts > div > div > div:nth-child(5) > div.info-table-row__entry > span > a')['href'].split('/')[-2] if soup.select_one('#facts > div > div > div:nth-child(5) > div.info-table-row__entry > span > a') else 'N/A'
+    year = soup.select_one('#facts > div > div > div:nth-child(7) > div.info-table-row__entry > span > a').text.strip() if soup.select_one('#facts > div > div > div:nth-child(7) > div.info-table-row__entry > span > a') else 'N/A'
+    segment = soup.select_one('#facts > div > div > div:nth-child(6) > div.info-table-row__entry > div > a')['href'].split('/')[-2] if soup.select_one('#facts > div > div > div:nth-child(6) > div.info-table-row__entry > div > a') else 'N/A'
+    perfumers = [a['href'].split('/')[-2] for a in soup.select('#facts > div > div > div:nth-child(11) > div.info-table-row__content > div > div > a')]
+    families = [a['href'].split('/')[-2] for a in soup.select('#pyramid > div > div > section.page-block-section.perfume-pyramid__groups > div > ul > li > a')]
+    top_notes = [a['href'].split('/')[-2] for a in soup.select('#pyramid > div > div > section:nth-child(1) > div > figure > ul.composition-pyramid__top > li > a')]
+    middle_notes = [a['href'].split('/')[-2] for a in soup.select('#pyramid > div > div > section:nth-child(1) > div > figure > ul.composition-pyramid__middle > li > a')]
+    bottom_notes = [a['href'].split('/')[-2] for a in soup.select('#pyramid > div > div > section:nth-child(1) > div > figure > ul.composition-pyramid__bottom > li > a')]
+    users_notes = [a['href'].split('/')[-2] for a in soup.select('#character > div > div > div.perfume-character__top > section.page-block-section.perfume-character__base-notes > div > div a')]
+
+    return {
+        "name": name,
+        "brand": brand,
+        "type": type_,
+        "rating_value": rating_value,
+        "rating_count": rating_count,
+        "gender": gender,
+        "country": country,
+        "year": year,
+        "segment": segment,
+        "perfumers": perfumers,
+        "families": families,
+        "top_notes": top_notes,
+        "middle_notes": middle_notes,
+        "bottom_notes": bottom_notes,
+        "users_notes": users_notes,
+        "url": url
+    }
 
 # Función para cargar cookies desde archivos JSON y filtrarlas
 def load_cookies(file_path):
@@ -81,15 +106,27 @@ max_iterations = 800
 
 # Función principal
 def main():
+    global iteration_count  # Declarar iteration_count como global
+
     # Leer las URLs desde el archivo perfume_links.txt
     with open('perfume_links.txt', 'r') as file:
         urls = [line.strip() for line in file]
 
     with open('perfumes.csv', mode='w', newline='', encoding='utf-8') as file:
-        writer = csv.writer(file)
-        writer.writerow(['Name', 'Brand', 'Type', 'Rating Value', 'Rating Count', 'Gender', 'Country'])
+        fieldnames = [
+            "name", "brand", "type", "rating_value", "rating_count", "gender", "country", "year", 
+            "segment", "perfumers", "families", "top_notes", "middle_notes", "bottom_notes", "users_notes", "url"
+        ]
+        writer = csv.DictWriter(file, fieldnames=fieldnames)
+        writer.writeheader()
 
         for url in urls:
+            # Verificar si se debe pausar la ejecución
+            if read_control_file() == "pause":
+                print("Script pausado. Cambia el contenido de control.txt para continuar.")
+                while read_control_file() == "pause":
+                    time.sleep(10)
+
             if iteration_count >= max_iterations:
                 # Pausar el script por 5 minutos
                 print('Pausando por 5 minutos...')
@@ -118,6 +155,7 @@ if __name__ == "__main__":
 
 driver.quit()
 print("Scraping completado.")
+
 
 
 
