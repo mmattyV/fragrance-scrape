@@ -174,7 +174,7 @@ def main():
             if iteration_count >= max_iterations:
                 # Pausar el script por 5 minutos
                 print('Pausando por 5 minutos...')
-                time.sleep(300)
+                time.sleep(100)
                 
                 # Seleccionar un archivo de cookies al azar y cargarlo
                 load_random_cookies()
