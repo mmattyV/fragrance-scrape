@@ -57,7 +57,7 @@ while current_page <= max_pages:
 driver.quit()
 
 # Guardar los enlaces en un archivo
-with open('perfume_links.txt', 'w') as file:
+with open('aro_perfume_links.txt', 'w') as file:
     for link in all_links:
         file.write(f'{link}\n')
 

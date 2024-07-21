@@ -102,17 +102,17 @@ add_cookies(driver, current_cookies)
 
 # Contador de iteraciones
 iteration_count = 0
-max_iterations = 800
+max_iterations = 800 # numero de iteraciones limitado para evitar bloqueos
 
 # Función principal
 def main():
     global iteration_count  # Declarar iteration_count como global
 
     # Leer las URLs desde el archivo perfume_links.txt
-    with open('perfume_links.txt', 'r') as file:
+    with open('perfume_links_aromo.txt', 'r') as file:
         urls = [line.strip() for line in file]
 
-    with open('perfumes.csv', mode='w', newline='', encoding='utf-8') as file:
+    with open('aro_perfumes.csv', mode='w', newline='', encoding='utf-8') as file:
         fieldnames = [
             "name", "brand", "type", "rating_value", "rating_count", "gender", "country", "year", 
             "segment", "perfumers", "families", "top_notes", "middle_notes", "bottom_notes", "users_notes", "url"
