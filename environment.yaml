@@ -1,13 +1,22 @@
 name: Aroma
 channels:
   - defaults
-  - conda-forge
 dependencies:
   - python=3.11.7
-  - jupyter
-  - pandas
+  - pip
   - numpy
-  - requests
-  - beautifulsoup4
-  - selenium
-  - lxml
+  - pandas
+  - scikit-learn
+  - matplotlib
+  - seaborn
+  - jupyterlab
+  - pip:
+    - selenium
+    - beautifulsoup4
+    - requests
+    - chromedriver-autoinstaller
+    - undetected-chromedriver
+    - tqdm
+    - plotly
+    - missingno
+    - statsmodels
