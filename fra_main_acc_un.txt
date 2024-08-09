@@ -1,0 +1,91 @@
+Champagne
+Pear
+alcohol
+aldehydic
+almond
+amber
+animalic
+anis
+aquatic
+aromatic
+asphault
+bacon
+balsamic
+bbq
+beeswax
+bitter
+brown scotch tape
+cacao
+camphor
+cannabis
+caramel
+cherry
+chocolate
+cinnamon
+citrus
+clay
+coca-cola
+coconut
+coffee
+conifer
+earthy
+floral
+foresty
+fresh
+fresh spicy
+fruity
+gasoline
+gourmand
+green
+herbal
+honey
+hot iron
+industrial glue
+iris
+lactonic
+lavender
+leather
+marine
+meat
+metallic
+milky
+mineral
+mossy
+musky
+nan
+nutty
+oily
+oud
+ozonic
+paper
+patchouli
+plastic
+powdery
+rose
+rubber
+rum
+sake
+salty
+sand
+savory
+smoky
+soapy
+soft spicy
+sour
+sweet
+tennis ball
+terpenic
+tobacco
+tropical
+tuberose
+vanilla
+vinyl
+violet
+vodka
+warm spicy
+wet plaster
+whiskey
+white floral
+wine
+woody
+yellow floral
