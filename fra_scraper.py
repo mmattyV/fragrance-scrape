@@ -4,28 +4,33 @@ import random
 import time
 import requests
 import concurrent.futures
-from selenium import webdriver
-from selenium.webdriver.chrome.service import Service
+import cloudscraper
 from bs4 import BeautifulSoup
-import chromedriver_autoinstaller
 from tqdm import tqdm
+import logging
 
-# Configure FlareSolverr
-FLARESOLVERR_URL = 'http://localhost:8191/v1'
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    filename='scraper.log',
+    filemode='a'
+)
 
-# Auto-install chromedriver
-chromedriver_path = chromedriver_autoinstaller.install()
-
-# Configure Chrome
-options = webdriver.ChromeOptions()
-options.add_argument('--headless')  # Run in headless mode
-options.add_argument('--no-sandbox')
-options.add_argument('--disable-dev-shm-usage')
-service = Service(chromedriver_path)
-driver = webdriver.Chrome(service=service, options=options)
+# Configure SmartProxy
+SMARTPROXY_USERNAME = 'sphisy7zqk'
+SMARTPROXY_PASSWORD = 'Xmz7dkGgV2+1glKwx5'
+SMARTPROXY_ENDPOINT = 'gate.decodo.com:7000'
+PROXY_URL = f"http://{SMARTPROXY_USERNAME}:{SMARTPROXY_PASSWORD}@{SMARTPROXY_ENDPOINT}"
+PROXIES = {
+    'http': PROXY_URL,
+    'https': PROXY_URL
+}
 
 # Path to control file
 control_file_path = os.path.join(os.getcwd(), 'control.txt')
+failed_urls_path = os.path.join(os.getcwd(), 'failed_urls.txt')
+checkpoint_path = os.path.join(os.getcwd(), 'checkpoint.txt')
 
 # Function to read control file
 def read_control_file():
@@ -35,38 +40,65 @@ def read_control_file():
     with open(control_file_path, 'r') as file:
         return file.read().strip()
 
-# Function to make requests via FlareSolverr with retries
-def flaresolverr_request(url, retries=3, delay=3):
-    print(f"Requesting URL via FlareSolverr: {url}")
-    payload = {
-        'cmd': 'request.get',
-        'url': url,
-        'maxTimeout': 60000
-    }
+# Function to make requests via cloudscraper with retries
+def cloudscraper_request(url, retries=3, delay=3):
+    logging.info(f"Requesting URL: {url}")
+    scraper = cloudscraper.create_scraper(browser={
+        'browser': 'chrome',
+        'platform': 'darwin',
+        'mobile': False
+    })
+    
+    # Set up the proxies with the scraper
+    scraper.proxies = PROXIES
+    
     for attempt in range(retries):
         try:
-            response = requests.post(FLARESOLVERR_URL, json=payload)
+            response = scraper.get(url, timeout=30)
             response.raise_for_status()  # Raise error for non-successful HTTP status codes
-            print(f"Response status: {response.status_code}")
-            return response.json()
+            logging.info(f"Response status: {response.status_code}")
+            return response.text
         except requests.exceptions.HTTPError as http_err:
-            print(f"HTTP error occurred: {http_err}")
+            logging.error(f"HTTP error occurred: {http_err}")
         except Exception as err:
-            print(f"An error occurred: {err}")
+            logging.error(f"An error occurred: {err}")
         
         # Moderate delay with randomization
         retry_delay = delay + random.uniform(0.5, 2)
-        print(f"Retrying in {retry_delay:.2f} seconds...")
+        logging.info(f"Retrying in {retry_delay:.2f} seconds...")
         time.sleep(retry_delay)
     return None
+
+# Function to save failed URL
+def save_failed_url(url):
+    logging.error(f"Failed to scrape URL: {url}")
+    with open(failed_urls_path, 'a') as file:
+        file.write(f"{url}\n")
+
+# Function to save checkpoint
+def save_checkpoint(url_idx):
+    with open(checkpoint_path, 'w') as file:
+        file.write(str(url_idx))
+
+# Function to load checkpoint
+def load_checkpoint():
+    if os.path.exists(checkpoint_path):
+        with open(checkpoint_path, 'r') as file:
+            content = file.read().strip()
+            if content:
+                try:
+                    return int(content)
+                except ValueError:
+                    logging.error(f"Invalid checkpoint value: {content}")
+    return 0
 
 # Function to extract perfume information
 def extract_perfume_info(url):
     try:
-        print(f"Extracting perfume information from: {url}")
-        response = flaresolverr_request(url)
-        if response and 'solution' in response and 'response' in response['solution']:
-            soup = BeautifulSoup(response['solution']['response'], 'html.parser')
+        logging.info(f"Extracting perfume information from: {url}")
+        response = cloudscraper_request(url)
+        if response:
+            soup = BeautifulSoup(response, 'html.parser')
 
             # Extract basic information
             name_element = soup.select_one('h1[itemprop="name"]')
@@ -89,18 +121,18 @@ def extract_perfume_info(url):
             # Extract brand
             brand_element = soup.select_one('span[itemprop="name"]')
             brand = brand_element.get_text(strip=True) if brand_element else 'N/A'
-            print(f"Extracted brand: {brand}")
+            logging.info(f"Extracted brand: {brand}")
             
             # Clean the name by removing the brand name if it appears at the end
             if brand != 'N/A' and name.endswith(brand):
                 name = name[:-len(brand)].strip()
                 
-            print(f"Extracted name: {name}")
+            logging.info(f"Extracted name: {name}")
 
             # Extract gender
             gender_element = soup.select_one('h1 small')
             gender = gender_element.get_text(strip=True) if gender_element else 'N/A'
-            print(f"Extracted gender: {gender}")
+            logging.info(f"Extracted gender: {gender}")
 
             # Extract year launched
             year = 'N/A'
@@ -111,26 +143,26 @@ def extract_perfume_info(url):
                 year_match = re.search(r'launched in (\d{4})', description_text)
                 if year_match:
                     year = year_match.group(1)
-            print(f"Extracted year: {year}")
+            logging.info(f"Extracted year: {year}")
 
             # Extract ratings
             rating_value_element = soup.select_one('span[itemprop="ratingValue"]')
             rating_value = rating_value_element.get_text(strip=True) if rating_value_element else 'N/A'
-            print(f"Extracted rating value: {rating_value}")
+            logging.info(f"Extracted rating value: {rating_value}")
 
             rating_count_element = soup.select_one('span[itemprop="ratingCount"]')
             rating_count = rating_count_element.get_text(strip=True) if rating_count_element else 'N/A'
-            print(f"Extracted rating count: {rating_count}")
+            logging.info(f"Extracted rating count: {rating_count}")
 
             # Extract main accords
             main_accords_elements = soup.select('.accord-bar')
             main_accords = [element.get_text(strip=True) for element in main_accords_elements]
-            print(f"Extracted main accords: {main_accords}")
+            logging.info(f"Extracted main accords: {main_accords}")
 
             # Extract perfumer information
             perfumers_elements = soup.select('.cell a[href*="/noses/"]')
             perfumers = [element.get_text(strip=True) for element in perfumers_elements]
-            print(f"Extracted perfumers: {perfumers}")
+            logging.info(f"Extracted perfumers: {perfumers}")
 
             # Extract full description
             description = ''
@@ -166,21 +198,21 @@ def extract_perfume_info(url):
                 
                 # Trim any leading/trailing whitespace
                 description = description.strip()
-            print(f"Extracted description: {len(description)} characters")
+            logging.info(f"Extracted description: {len(description)} characters")
 
             # Extract longevity and sillage ratings
             longevity_element = soup.select_one('longevity-rating p')
             longevity = longevity_element.get_text(strip=True).replace('Perfume longevity:', '').strip() if longevity_element else 'N/A'
-            print(f"Extracted longevity: {longevity}")
+            logging.info(f"Extracted longevity: {longevity}")
 
             sillage_element = soup.select_one('sillage-rating p')
             sillage = sillage_element.get_text(strip=True).replace('Perfume sillage:', '').strip() if sillage_element else 'N/A'
-            print(f"Extracted sillage: {sillage}")
+            logging.info(f"Extracted sillage: {sillage}")
 
             # Extract image URL
             image_element = soup.select_one('img[itemprop="image"]')
             image_url = image_element['src'] if image_element and 'src' in image_element.attrs else 'N/A'
-            print(f"Extracted image URL: {image_url}")
+            logging.info(f"Extracted image URL: {image_url}")
 
             # Extract notes using multiple approaches
             top_notes = []
@@ -232,7 +264,7 @@ def extract_perfume_info(url):
                         notes_text = base_match.group(1).replace(' and ', ', ')
                         base_notes = [note.strip() for note in notes_text.split(',') if note.strip()]
                 except Exception as e:
-                    print(f"Error parsing notes from description: {e}")
+                    logging.error(f"Error parsing notes from description: {e}")
             
             # Approach 3: Try looking for note sections directly in the page
             if not any([top_notes, middle_notes, base_notes]):
@@ -255,7 +287,7 @@ def extract_perfume_info(url):
                             elif 'base notes' in section_text:
                                 base_notes = note_list
                 except Exception as e:
-                    print(f"Error finding note sections: {e}")
+                    logging.error(f"Error finding note sections: {e}")
             
             # Approach 4: Fall back to looking for classic HTML structure
             if not any([top_notes, middle_notes, base_notes]):
@@ -274,73 +306,61 @@ def extract_perfume_info(url):
                     note_elements = base_notes_div.select('div.cell.text-center')
                     base_notes = [note.select_one('div.nowrap').get_text(strip=True) if note.select_one('div.nowrap') else "Unknown" for note in note_elements]
             
-            print(f"Extracted top notes: {top_notes}")
-            print(f"Extracted middle notes: {middle_notes}")
-            print(f"Extracted base notes: {base_notes}")
+            logging.info(f"Extracted top notes: {top_notes}")
+            logging.info(f"Extracted middle notes: {middle_notes}")
+            logging.info(f"Extracted base notes: {base_notes}")
 
+            # Check if brand or name is missing or empty
+            if not brand or not name or brand.strip() == '' or name.strip() == '':
+                logging.error(f"Missing brand or name for URL: {url}")
+                save_failed_url(url)
+                return None
+            
+            # Clean and format ratings properly
+            if rating_value and isinstance(rating_value, str) and "out of" in rating_value:
+                rating_value = rating_value.replace("out of", " out of ")
+            
+            if rating_count and isinstance(rating_count, str) and rating_count.isdigit():
+                rating_count = int(rating_count)
+            
+            # Clean description from any potential problematic characters
+            if description:
+                # Remove any carriage returns, newlines, double quotes that could break CSV format
+                description = description.replace('\r', ' ').replace('\n', ' ')
+                # Replace any double quotes with single quotes to prevent CSV issues
+                description = description.replace('"', "'")
+            
             return {
-                "Name": name,
-                "Brand": brand,
-                "Gender": gender,
-                "Year": year,
+                "Name": name.strip() if name else 'N/A',
+                "Brand": brand.strip() if brand else 'N/A',
+                "Gender": gender.strip() if gender else 'N/A',
+                "Year": year.strip() if year else 'N/A',
                 "Rating Value": rating_value,
                 "Rating Count": rating_count,
-                "Main Accords": ','.join(main_accords) if isinstance(main_accords, list) else main_accords,
-                "Perfumers": ','.join(perfumers) if isinstance(perfumers, list) else perfumers,
+                "Main Accords": ','.join(main_accords) if isinstance(main_accords, list) else (main_accords if main_accords else 'N/A'),
+                "Perfumers": ','.join(perfumers) if isinstance(perfumers, list) else (perfumers if perfumers else 'N/A'),
                 "Top Notes": ','.join(top_notes) if top_notes else 'N/A',
                 "Middle Notes": ','.join(middle_notes) if middle_notes else 'N/A',
                 "Base Notes": ','.join(base_notes) if base_notes else 'N/A',
-                "Longevity": longevity,
-                "Sillage": sillage,
-                "Description": description,
-                "Image URL": image_url,
+                "Longevity": longevity if longevity else 'N/A',
+                "Sillage": sillage if sillage else 'N/A',
+                "Description": description if description else 'N/A',
+                "Image URL": image_url if image_url else 'N/A',
                 "URL": url
             }
         else:
-            print(f"Error processing URL: {url}")
-            return {
-                "Name": 'N/A',
-                "Brand": 'N/A',
-                "Gender": 'N/A',
-                "Year": 'N/A',
-                "Rating Value": 'N/A',
-                "Rating Count": 'N/A',
-                "Main Accords": 'N/A',
-                "Perfumers": 'N/A',
-                "Top Notes": 'N/A',
-                "Middle Notes": 'N/A',
-                "Base Notes": 'N/A',
-                "Longevity": 'N/A',
-                "Sillage": 'N/A',
-                "Description": 'N/A',
-                "Image URL": 'N/A',
-                "URL": url
-            }
+            logging.error(f"Error processing URL: {url}")
+            save_failed_url(url)
+            return None
     except Exception as e:
-        print(f"Error extracting info from {url}: {e}")
-        return {
-            "Name": 'Error',
-            "Brand": 'N/A',
-            "Gender": 'N/A',
-            "Year": 'N/A',
-            "Rating Value": 'N/A',
-            "Rating Count": 'N/A',
-            "Main Accords": 'N/A',
-            "Perfumers": 'N/A',
-            "Top Notes": 'N/A',
-            "Middle Notes": 'N/A',
-            "Base Notes": 'N/A',
-            "Longevity": 'N/A',
-            "Sillage": 'N/A',
-            "Description": f'Error: {str(e)}',
-            "Image URL": 'N/A',
-            "URL": url
-        }
+        logging.error(f"Error extracting info from {url}: {e}")
+        save_failed_url(url)
+        return None
 
 # Function to get links to process
 def get_perfume_links(filename='fra_per_links.txt'):
     if not os.path.exists(filename):
-        print(f"Warning: {filename} not found. Creating an empty file.")
+        logging.warning(f"Warning: {filename} not found. Creating an empty file.")
         with open(filename, 'w') as f:
             pass
         return []
@@ -363,10 +383,27 @@ class ThreadSafeWriter:
                 writer.writeheader()
     
     def write_row(self, row_dict):
+        # Sanitize CSV data to prevent formatting issues
+        sanitized_dict = {}
+        for key, value in row_dict.items():
+            if value is None:
+                sanitized_dict[key] = 'N/A'
+            elif isinstance(value, str):
+                # Clean rating format (e.g., "3.28out of5." -> "3.28 out of 5.")
+                if "out of" in value and "." in value:
+                    value = value.replace("out of", " out of ")
+                # Strip any extra quotes and escape any remaining quotes
+                value = value.strip()
+                # Remove any carriage returns or newlines that could break CSV format
+                value = value.replace('\r', ' ').replace('\n', ' ')
+                sanitized_dict[key] = value
+            else:
+                sanitized_dict[key] = value
+        
         with self.lock:
             with open(self.output_file, mode='a', newline='', encoding='utf-8') as f:
                 writer = csv.DictWriter(f, fieldnames=self.fieldnames)
-                writer.writerow(row_dict)
+                writer.writerow(sanitized_dict)
 
 # Process a batch of URLs
 def process_url_batch(urls, csv_writer, start_idx, total_urls):
@@ -376,30 +413,34 @@ def process_url_batch(urls, csv_writer, start_idx, total_urls):
             # Check control file
             control_command = read_control_file()
             if control_command == "pause":
-                print("Script paused. Change control.txt to 'run' to continue.")
+                logging.info("Script paused. Change control.txt to 'run' to continue.")
                 while read_control_file() == "pause":
                     time.sleep(10)
             elif control_command == "abort":
-                print("Script aborted.")
+                logging.info("Script aborted.")
                 break
                 
             overall_idx = start_idx + i
-            print(f"Processing URL {overall_idx+1}/{total_urls}: {url}")
+            logging.info(f"Processing URL {overall_idx+1}/{total_urls}: {url}")
             
             # Get the perfume info
             perfume_info = extract_perfume_info(url)
             
             # Write to CSV
-            csv_writer.write_row(perfume_info)
-            print(f"Data from {url} written to CSV")
+            if perfume_info is not None:
+                csv_writer.write_row(perfume_info)
+                logging.info(f"Data from {url} written to CSV")
+            
+            # Save checkpoint
+            save_checkpoint(overall_idx + 1)
             
             # Moderate random delay between requests within a worker
             delay = random.uniform(2.5, 5)  # Balanced delay between original and previous modification
-            print(f"Waiting {delay:.2f} seconds before next request...")
+            logging.info(f"Waiting {delay:.2f} seconds before next request...")
             time.sleep(delay)
             
         except Exception as e:
-            print(f"Error processing {url}: {e}")
+            logging.error(f"Error processing {url}: {e}")
     
     return results
 
@@ -415,12 +456,21 @@ def main():
     # Get perfume links
     urls = get_perfume_links()
     if not urls:
-        print("No perfume links found. Please add links to fra_per_links.txt.")
-        print("Example link format: https://www.fragrantica.com/perfume/Brand/Perfume-Name-ID.html")
+        logging.info("No perfume links found. Please add links to fra_per_links.txt.")
+        logging.info("Example link format: https://www.fragrantica.com/perfume/Brand/Perfume-Name-ID.html")
         return
     
     total_urls = len(urls)
-    print(f"Total URLs to process: {total_urls}")
+    logging.info(f"Total URLs to process: {total_urls}")
+    
+    # Load checkpoint
+    start_idx = load_checkpoint()
+    if start_idx > 0 and start_idx < total_urls:
+        logging.info(f"Resuming from checkpoint: {start_idx}")
+        urls = urls[start_idx:]
+        logging.info(f"Remaining URLs to process: {len(urls)}")
+    else:
+        start_idx = 0
     
     # Define CSV fields
     fieldnames = [
@@ -431,29 +481,33 @@ def main():
     # Create thread-safe CSV writer
     csv_writer = ThreadSafeWriter(output_csv, fieldnames)
     
-    # Parallel processing settings - balanced between original and previous modification
-    batch_size = 8  # Increased from 5, but still less than original 10
-    max_workers = 3  # Increased from 2, but still less than original 5
-    total_batches = (total_urls + batch_size - 1) // batch_size  # Ceiling division
+    # Parallel processing settings
+    batch_size = 10  # More conservative to avoid detection
+    max_workers = 5  # More conservative to avoid detection
+    total_batches = (len(urls) + batch_size - 1) // batch_size  # Ceiling division
     
-    print(f"Processing URLs in {total_batches} batches with {max_workers} parallel workers")
+    logging.info(f"Processing URLs in {total_batches} batches with {max_workers} parallel workers")
     
     # Process in batches
     for batch_idx in tqdm(range(0, total_batches), desc="Processing batches", unit="batch"):
         # Check if we should abort
         if read_control_file() == "abort":
-            print("Script aborted.")
+            logging.info("Script aborted.")
             break
             
-        start_idx = batch_idx * batch_size
-        end_idx = min(start_idx + batch_size, total_urls)
-        batch_urls = urls[start_idx:end_idx]
+        batch_start_idx = batch_idx * batch_size
+        batch_end_idx = min(batch_start_idx + batch_size, len(urls))
+        batch_urls = urls[batch_start_idx:batch_end_idx]
         
-        print(f"\nProcessing batch {batch_idx+1}/{total_batches} (URLs {start_idx+1}-{end_idx})")
+        # Calculate the absolute indices for checkpoint saving
+        abs_start_idx = start_idx + batch_start_idx
+        abs_end_idx = start_idx + batch_end_idx
+        
+        logging.info(f"\nProcessing batch {batch_idx+1}/{total_batches} (URLs {abs_start_idx+1}-{abs_end_idx} of {total_urls})")
         
         # For small batches, process sequentially to avoid overhead
         if len(batch_urls) <= 2:
-            process_url_batch(batch_urls, csv_writer, start_idx, total_urls)
+            process_url_batch(batch_urls, csv_writer, abs_start_idx, total_urls)
         else:
             # Split the batch into chunks for parallel processing
             chunk_size = max(1, len(batch_urls) // max_workers)
@@ -464,7 +518,7 @@ def main():
                 # Submit tasks
                 futures = []
                 for i, chunk in enumerate(chunks):
-                    chunk_start_idx = start_idx + (i * chunk_size)
+                    chunk_start_idx = abs_start_idx + (i * chunk_size)
                     futures.append(executor.submit(process_url_batch, chunk, csv_writer, chunk_start_idx, total_urls))
                 
                 # Wait for completion with progress bar
@@ -475,23 +529,23 @@ def main():
                     try:
                         future.result()
                     except Exception as e:
-                        print(f"Error in batch processing: {e}")
+                        logging.error(f"Error in batch processing: {e}")
         
         # Pause between batches to avoid being rate-limited
         if batch_idx < total_batches - 1:  # Skip pause after the last batch
-            pause_duration = random.uniform(8, 15)  # Balanced between original 5s and previous 15-30s
-            print(f"Pausing for {pause_duration:.2f} seconds between batches...")
+            pause_duration = random.uniform(10, 20)  # More conservative to avoid detection
+            logging.info(f"Pausing for {pause_duration:.2f} seconds between batches...")
             time.sleep(pause_duration)
     
-    print(f"Scraping completed. Data saved to {output_csv}")
+    logging.info(f"Scraping completed. Data saved to {output_csv}")
+    # Clear checkpoint file to indicate completion
+    if os.path.exists(checkpoint_path):
+        save_checkpoint(total_urls)
 
 if __name__ == "__main__":
     try:
         main()
     except KeyboardInterrupt:
-        print("\nScript interrupted by user.")
+        logging.info("\nScript interrupted by user.")
     except Exception as e:
-        print(f"An error occurred: {e}")
-    finally:
-        driver.quit()
-        print("Browser closed.")
+        logging.error(f"An error occurred: {e}")

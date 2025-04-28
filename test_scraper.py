@@ -1,51 +1,65 @@
 import os
-import random
-import time
-from mac_fra_scraper import extract_perfume_info, driver
+import sys
 import csv
+import logging
+from fra_scraper import extract_perfume_info, ThreadSafeWriter
 
-# Create a small test set of URLs (first 5 from the full list)
-def get_test_links():
-    with open('fra_per_links.txt', 'r') as file:
-        return [line.strip() for line in file][:5]  # Get first 5 links
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler("test_scraper.log"),
+        logging.StreamHandler(sys.stdout)
+    ]
+)
 
-# Main function for testing
-def main():
+# Test URLs, including ones likely to have formatting challenges
+TEST_URLS = [
+    "https://www.fragrantica.com/perfume/A-Dozen-Roses/Gold-Rush-12963.html",  # The one with issues
+    "https://www.fragrantica.com/perfume/Bond-No-9/High-Line-7503.html",       # Another problematic one
+    "https://www.fragrantica.com/perfume/Byredo/Mojave-Ghost-25020.html"       # A regular one for comparison
+]
+
+def test_scraper():
     # Create output directory if it doesn't exist
     output_dir = os.path.join(os.getcwd(), 'data')
     os.makedirs(output_dir, exist_ok=True)
     
-    # Output CSV file for testing
-    output_csv = os.path.join(output_dir, 'test_fragrances.csv')
+    # Output CSV file
+    output_csv = os.path.join(output_dir, 'test_fragrance_data.csv')
     
-    # Get test perfume links
-    test_urls = get_test_links()
-    print(f"Testing with {len(test_urls)} URLs")
+    # Define CSV fields
+    fieldnames = [
+        "Name", "Brand", "Gender", "Year", "Rating Value", "Rating Count", "Main Accords", 
+        "Perfumers", "Top Notes", "Middle Notes", "Base Notes", "Longevity", "Sillage", "Description", "Image URL", "URL"
+    ]
     
-    # Open CSV file
-    with open(output_csv, mode='w', newline='', encoding='utf-8') as file:
-        fieldnames = [
-            "Name", "Brand", "Gender", "Year", "Rating Value", "Rating Count", "Main Accords", 
-            "Perfumers", "Top Notes", "Middle Notes", "Base Notes", "Longevity", "Sillage", "Description", "Image URL", "URL"
-        ]
-        writer = csv.DictWriter(file, fieldnames=fieldnames)
-        writer.writeheader()
-        
-        for i, url in enumerate(test_urls):
-            print(f"Processing test URL {i+1}/{len(test_urls)}: {url}")
+    # Create CSV writer
+    csv_writer = ThreadSafeWriter(output_csv, fieldnames)
+    
+    # Process test URLs
+    for url in TEST_URLS:
+        logging.info(f"Testing extraction for URL: {url}")
+        try:
+            # Extract perfume info
             perfume_info = extract_perfume_info(url)
-            writer.writerow(perfume_info)
-            print(f"Test data from {url} written to CSV")
             
-            time.sleep(random.uniform(2, 5))  # Random delay between requests
+            # Check if data was extracted successfully
+            if perfume_info:
+                # Write data to CSV
+                csv_writer.write_row(perfume_info)
+                logging.info(f"Successfully processed: {url}")
+                
+                # Print data for verification
+                for key, value in perfume_info.items():
+                    logging.info(f"{key}: {value}")
+            else:
+                logging.error(f"Failed to extract data from: {url}")
+        except Exception as e:
+            logging.error(f"Error processing {url}: {e}")
     
-    print(f"Test scraping completed. Data saved to {output_csv}")
+    logging.info(f"Test completed. Output written to {output_csv}")
 
 if __name__ == "__main__":
-    try:
-        main()
-    except Exception as e:
-        print(f"An error occurred during testing: {e}")
-    finally:
-        driver.quit()
-        print("Browser closed.")
+    test_scraper()

@@ -4,7 +4,7 @@ Brotli
 certifi
 cffi
 charset-normalizer
-chromedriver-autoinstaller
+cloudscraper
 colorama==0.4.6
 exceptiongroup
 fake-useragent==1.5.1
@@ -26,7 +26,6 @@ python-dateutil
 python-dotenv==1.0.1
 pytz
 requests
-selenium
 six
 sniffio
 sortedcontainers
@@ -38,7 +37,6 @@ typing_extensions
 tzdata
 undetected-chromedriver==3.5.5
 urllib3==1.26.19
-webdriver-manager==4.0.1
 websocket-client
 websockets==10.4
 win-inet-pton
