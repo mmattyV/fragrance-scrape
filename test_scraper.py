@@ -1,4 +1,5 @@
 import os
+import random
 import time
 from mac_fra_scraper import extract_perfume_info, driver
 import csv
@@ -24,8 +25,8 @@ def main():
     # Open CSV file
     with open(output_csv, mode='w', newline='', encoding='utf-8') as file:
         fieldnames = [
-            "Name", "Gender", "Rating Value", "Rating Count", "Main Accords", 
-            "Perfumers", "Top Notes", "Middle Notes", "Base Notes", "Description", "URL"
+            "Name", "Brand", "Gender", "Year", "Rating Value", "Rating Count", "Main Accords", 
+            "Perfumers", "Top Notes", "Middle Notes", "Base Notes", "Longevity", "Sillage", "Description", "Image URL", "URL"
         ]
         writer = csv.DictWriter(file, fieldnames=fieldnames)
         writer.writeheader()
