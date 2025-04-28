@@ -1,5 +1,2 @@
-# Ignorar el entorno virtual
 env/
-
-# Ignorar archivos y directorios de Jupyter Notebook
-.ipynb_checkpoints/
+__pycache__
