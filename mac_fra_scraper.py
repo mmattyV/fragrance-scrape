@@ -366,7 +366,7 @@ class ThreadSafeWriter:
                 writer.writerow(row_dict)
 
 # Process a batch of URLs
-def process_url_batch(urls, csv_writer, start_idx):
+def process_url_batch(urls, csv_writer, start_idx, total_urls):
     results = []
     for i, url in enumerate(urls):
         try:
@@ -381,7 +381,7 @@ def process_url_batch(urls, csv_writer, start_idx):
                 break
                 
             overall_idx = start_idx + i
-            print(f"Processing URL {overall_idx+1}/{len(urls)}: {url}")
+            print(f"Processing URL {overall_idx+1}/{total_urls}: {url}")
             
             # Get the perfume info
             perfume_info = extract_perfume_info(url)
@@ -448,7 +448,7 @@ def main():
         
         # For small batches, process sequentially to avoid overhead
         if len(batch_urls) <= 2:
-            process_url_batch(batch_urls, csv_writer, start_idx)
+            process_url_batch(batch_urls, csv_writer, start_idx, total_urls)
         else:
             # Split the batch into chunks for parallel processing
             chunk_size = max(1, len(batch_urls) // max_workers)
@@ -460,7 +460,7 @@ def main():
                 futures = []
                 for i, chunk in enumerate(chunks):
                     chunk_start_idx = start_idx + (i * chunk_size)
-                    futures.append(executor.submit(process_url_batch, chunk, csv_writer, chunk_start_idx))
+                    futures.append(executor.submit(process_url_batch, chunk, csv_writer, chunk_start_idx, total_urls))
                 
                 # Wait for completion with progress bar
                 for future in tqdm(concurrent.futures.as_completed(futures), 
