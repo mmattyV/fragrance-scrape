@@ -36,7 +36,7 @@ def read_control_file():
         return file.read().strip()
 
 # Function to make requests via FlareSolverr with retries
-def flaresolverr_request(url, retries=3, delay=2):
+def flaresolverr_request(url, retries=3, delay=3):
     print(f"Requesting URL via FlareSolverr: {url}")
     payload = {
         'cmd': 'request.get',
@@ -53,8 +53,11 @@ def flaresolverr_request(url, retries=3, delay=2):
             print(f"HTTP error occurred: {http_err}")
         except Exception as err:
             print(f"An error occurred: {err}")
-        print(f"Retrying in {delay} seconds...")
-        time.sleep(delay)
+        
+        # Moderate delay with randomization
+        retry_delay = delay + random.uniform(0.5, 2)
+        print(f"Retrying in {retry_delay:.2f} seconds...")
+        time.sleep(retry_delay)
     return None
 
 # Function to extract perfume information
@@ -390,8 +393,10 @@ def process_url_batch(urls, csv_writer, start_idx, total_urls):
             csv_writer.write_row(perfume_info)
             print(f"Data from {url} written to CSV")
             
-            # Short random delay between requests within a worker
-            time.sleep(random.uniform(1, 2))
+            # Moderate random delay between requests within a worker
+            delay = random.uniform(2.5, 5)  # Balanced delay between original and previous modification
+            print(f"Waiting {delay:.2f} seconds before next request...")
+            time.sleep(delay)
             
         except Exception as e:
             print(f"Error processing {url}: {e}")
@@ -426,9 +431,9 @@ def main():
     # Create thread-safe CSV writer
     csv_writer = ThreadSafeWriter(output_csv, fieldnames)
     
-    # Parallel processing settings
-    batch_size = 10  # URLs per batch
-    max_workers = 5  # Parallel workers
+    # Parallel processing settings - balanced between original and previous modification
+    batch_size = 8  # Increased from 5, but still less than original 10
+    max_workers = 3  # Increased from 2, but still less than original 5
     total_batches = (total_urls + batch_size - 1) // batch_size  # Ceiling division
     
     print(f"Processing URLs in {total_batches} batches with {max_workers} parallel workers")
@@ -474,8 +479,8 @@ def main():
         
         # Pause between batches to avoid being rate-limited
         if batch_idx < total_batches - 1:  # Skip pause after the last batch
-            pause_duration = 5  # 5 seconds between batches
-            print(f"Pausing for {pause_duration} seconds between batches...")
+            pause_duration = random.uniform(8, 15)  # Balanced between original 5s and previous 15-30s
+            print(f"Pausing for {pause_duration:.2f} seconds between batches...")
             time.sleep(pause_duration)
     
     print(f"Scraping completed. Data saved to {output_csv}")
