@@ -30,7 +30,6 @@ PROXIES = {
 # Path to control file
 control_file_path = os.path.join(os.getcwd(), 'control.txt')
 failed_urls_path = os.path.join(os.getcwd(), 'failed_urls.txt')
-checkpoint_path = os.path.join(os.getcwd(), 'checkpoint.txt')
 
 # Function to read control file
 def read_control_file():
@@ -57,7 +56,10 @@ def cloudscraper_request(url, retries=3, delay=3):
             response = scraper.get(url, timeout=30)
             response.raise_for_status()  # Raise error for non-successful HTTP status codes
             logging.info(f"Response status: {response.status_code}")
-            return response.text
+            result = response.text
+            # Explicitly close the response and connection
+            response.close()
+            return result
         except requests.exceptions.HTTPError as http_err:
             logging.error(f"HTTP error occurred: {http_err}")
         except Exception as err:
@@ -74,23 +76,6 @@ def save_failed_url(url):
     logging.error(f"Failed to scrape URL: {url}")
     with open(failed_urls_path, 'a') as file:
         file.write(f"{url}\n")
-
-# Function to save checkpoint
-def save_checkpoint(url_idx):
-    with open(checkpoint_path, 'w') as file:
-        file.write(str(url_idx))
-
-# Function to load checkpoint
-def load_checkpoint():
-    if os.path.exists(checkpoint_path):
-        with open(checkpoint_path, 'r') as file:
-            content = file.read().strip()
-            if content:
-                try:
-                    return int(content)
-                except ValueError:
-                    logging.error(f"Invalid checkpoint value: {content}")
-    return 0
 
 # Function to extract perfume information
 def extract_perfume_info(url):
@@ -359,14 +344,42 @@ def extract_perfume_info(url):
 
 # Function to get links to process
 def get_perfume_links(filename='fra_per_links.txt'):
-    if not os.path.exists(filename):
-        logging.warning(f"Warning: {filename} not found. Creating an empty file.")
-        with open(filename, 'w') as f:
-            pass
+    links_path = os.path.join(os.getcwd(), filename)
+    if os.path.exists(links_path):
+        with open(links_path, 'r') as file:
+            urls = [line.strip() for line in file.readlines() if line.strip()]
+        logging.info(f"Loaded {len(urls)} perfume links from {filename}")
+        return urls
+    else:
+        logging.info(f"Links file {filename} not found.")
         return []
-    
-    with open(filename, 'r') as file:
-        return [line.strip() for line in file if line.strip()]
+
+# Function to get already processed URLs from CSV
+def get_processed_urls(csv_file):
+    processed_urls = set()
+    if os.path.exists(csv_file):
+        try:
+            with open(csv_file, 'r', encoding='utf-8') as file:
+                reader = csv.DictReader(file)
+                for row in reader:
+                    if 'URL' in row and row['URL']:
+                        processed_urls.add(row['URL'])
+            logging.info(f"Found {len(processed_urls)} already processed URLs in {csv_file}")
+        except Exception as e:
+            logging.error(f"Error reading CSV file {csv_file}: {e}")
+    return processed_urls
+
+# Function to get failed URLs
+def get_failed_urls(file_path=failed_urls_path):
+    failed_urls = set()
+    if os.path.exists(file_path):
+        try:
+            with open(file_path, 'r') as file:
+                failed_urls = {line.strip() for line in file if line.strip()}
+            logging.info(f"Found {len(failed_urls)} failed URLs in {file_path}")
+        except Exception as e:
+            logging.error(f"Error reading failed URLs file {file_path}: {e}")
+    return failed_urls
 
 # CSV writer that's thread-safe
 class ThreadSafeWriter:
@@ -431,9 +444,6 @@ def process_url_batch(urls, csv_writer, start_idx, total_urls):
                 csv_writer.write_row(perfume_info)
                 logging.info(f"Data from {url} written to CSV")
             
-            # Save checkpoint
-            save_checkpoint(overall_idx + 1)
-            
             # Moderate random delay between requests within a worker
             delay = random.uniform(2.5, 5)  # Balanced delay between original and previous modification
             logging.info(f"Waiting {delay:.2f} seconds before next request...")
@@ -454,23 +464,32 @@ def main():
     output_csv = os.path.join(output_dir, 'fragrance_data.csv')
     
     # Get perfume links
-    urls = get_perfume_links()
-    if not urls:
+    all_urls = get_perfume_links()
+    if not all_urls:
         logging.info("No perfume links found. Please add links to fra_per_links.txt.")
         logging.info("Example link format: https://www.fragrantica.com/perfume/Brand/Perfume-Name-ID.html")
         return
     
-    total_urls = len(urls)
-    logging.info(f"Total URLs to process: {total_urls}")
+    # Get already processed URLs from the main CSV file only
+    processed_urls = get_processed_urls(output_csv)
     
-    # Load checkpoint
-    start_idx = load_checkpoint()
-    if start_idx > 0 and start_idx < total_urls:
-        logging.info(f"Resuming from checkpoint: {start_idx}")
-        urls = urls[start_idx:]
-        logging.info(f"Remaining URLs to process: {len(urls)}")
-    else:
-        start_idx = 0
+    # Get failed URLs
+    failed_urls = get_failed_urls()
+    
+    # Filter out already processed and failed URLs
+    urls_to_skip = processed_urls.union(failed_urls)
+    urls = [url for url in all_urls if url not in urls_to_skip]
+    
+    skipped_count = len(all_urls) - len(urls)
+    logging.info(f"Total URLs: {len(all_urls)}")
+    logging.info(f"Skipping {skipped_count} already processed or failed URLs")
+    logging.info(f"URLs to process: {len(urls)}")
+    
+    if not urls:
+        logging.info("All URLs have been processed already. Nothing to do.")
+        return
+    
+    total_urls = len(urls)
     
     # Define CSV fields
     fieldnames = [
@@ -482,8 +501,8 @@ def main():
     csv_writer = ThreadSafeWriter(output_csv, fieldnames)
     
     # Parallel processing settings
-    batch_size = 10  # More conservative to avoid detection
-    max_workers = 5  # More conservative to avoid detection
+    batch_size = 5  # Reduced from 10 to 5 to avoid socket buffer issues
+    max_workers = 3  # Reduced from 5 to 3 to avoid socket buffer issues
     total_batches = (len(urls) + batch_size - 1) // batch_size  # Ceiling division
     
     logging.info(f"Processing URLs in {total_batches} batches with {max_workers} parallel workers")
@@ -500,8 +519,8 @@ def main():
         batch_urls = urls[batch_start_idx:batch_end_idx]
         
         # Calculate the absolute indices for checkpoint saving
-        abs_start_idx = start_idx + batch_start_idx
-        abs_end_idx = start_idx + batch_end_idx
+        abs_start_idx = batch_start_idx
+        abs_end_idx = batch_end_idx
         
         logging.info(f"\nProcessing batch {batch_idx+1}/{total_batches} (URLs {abs_start_idx+1}-{abs_end_idx} of {total_urls})")
         
@@ -538,9 +557,6 @@ def main():
             time.sleep(pause_duration)
     
     logging.info(f"Scraping completed. Data saved to {output_csv}")
-    # Clear checkpoint file to indicate completion
-    if os.path.exists(checkpoint_path):
-        save_checkpoint(total_urls)
 
 if __name__ == "__main__":
     try:
