@@ -501,8 +501,8 @@ def main():
     csv_writer = ThreadSafeWriter(output_csv, fieldnames)
     
     # Parallel processing settings
-    batch_size = 5  # Reduced from 10 to 5 to avoid socket buffer issues
-    max_workers = 3  # Reduced from 5 to 3 to avoid socket buffer issues
+    batch_size = 10
+    max_workers = 5
     total_batches = (len(urls) + batch_size - 1) // batch_size  # Ceiling division
     
     logging.info(f"Processing URLs in {total_batches} batches with {max_workers} parallel workers")
@@ -552,7 +552,7 @@ def main():
         
         # Pause between batches to avoid being rate-limited
         if batch_idx < total_batches - 1:  # Skip pause after the last batch
-            pause_duration = random.uniform(10, 20)  # More conservative to avoid detection
+            pause_duration = random.uniform(2, 5)  # More conservative to avoid detection
             logging.info(f"Pausing for {pause_duration:.2f} seconds between batches...")
             time.sleep(pause_duration)
     
