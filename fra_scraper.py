@@ -3,6 +3,7 @@ import os
 import random
 import time
 import requests
+from requests.adapters import HTTPAdapter
 import concurrent.futures
 import cloudscraper
 from bs4 import BeautifulSoup
@@ -27,6 +28,18 @@ PROXIES = {
     'https': PROXY_URL
 }
 
+# 1) Create one global, pooled scraper
+scraper = cloudscraper.create_scraper(
+    browser={'browser': 'chrome','platform': 'darwin','mobile': False}
+)
+scraper.proxies = PROXIES
+
+
+# 2) Mount adapters for connection‐pooling
+adapter = HTTPAdapter(pool_connections=50, pool_maxsize=50, max_retries=0)
+scraper.mount("http://", adapter)
+scraper.mount("https://", adapter)
+
 # Path to control file
 control_file_path = os.path.join(os.getcwd(), 'control.txt')
 failed_urls_path = os.path.join(os.getcwd(), 'failed_urls.txt')
@@ -42,33 +55,23 @@ def read_control_file():
 # Function to make requests via cloudscraper with retries
 def cloudscraper_request(url, retries=3, delay=3):
     logging.info(f"Requesting URL: {url}")
-    scraper = cloudscraper.create_scraper(browser={
-        'browser': 'chrome',
-        'platform': 'darwin',
-        'mobile': False
-    })
-    
-    # Set up the proxies with the scraper
-    scraper.proxies = PROXIES
-    
     for attempt in range(retries):
         try:
+            # reuse the global scraper/session
             response = scraper.get(url, timeout=30)
-            response.raise_for_status()  # Raise error for non-successful HTTP status codes
-            logging.info(f"Response status: {response.status_code}")
-            result = response.text
-            # Explicitly close the response and connection
+            response.raise_for_status()
+            html = response.text
             response.close()
-            return result
-        except requests.exceptions.HTTPError as http_err:
-            logging.error(f"HTTP error occurred: {http_err}")
-        except Exception as err:
-            logging.error(f"An error occurred: {err}")
-        
-        # Moderate delay with randomization
-        retry_delay = delay + random.uniform(0.5, 2)
-        logging.info(f"Retrying in {retry_delay:.2f} seconds...")
-        time.sleep(retry_delay)
+            return html
+        except requests.exceptions.HTTPError as e:
+            logging.error(f"HTTP error: {e}")
+        except Exception as e:
+            logging.error(f"Connection error: {e}")
+
+        backoff = delay + random.uniform(0.5, 2)
+        logging.info(f"Retrying in {backoff:.1f}s…")
+        time.sleep(backoff)
+
     return None
 
 # Function to save failed URL
