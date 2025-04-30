@@ -35,10 +35,12 @@ scraper = cloudscraper.create_scraper(
 scraper.proxies = PROXIES
 
 
-# 2) Mount adapters for connection‐pooling
-adapter = HTTPAdapter(pool_connections=50, pool_maxsize=50, max_retries=0)
-scraper.mount("http://", adapter)
-scraper.mount("https://", adapter)
+# 2) Grab CloudScraper's existing HTTPS adapter
+cf_adapter = scraper.get_adapter("https://")
+
+# 3) Bump its pool sizes
+cf_adapter.pool_connections = 50
+cf_adapter.pool_maxsize = 50
 
 # Path to control file
 control_file_path = os.path.join(os.getcwd(), 'control.txt')
@@ -68,7 +70,7 @@ def cloudscraper_request(url, retries=3, delay=3):
         except Exception as e:
             logging.error(f"Connection error: {e}")
 
-        backoff = delay + random.uniform(0.5, 2)
+        backoff = delay + random.uniform(5, 10)
         logging.info(f"Retrying in {backoff:.1f}s…")
         time.sleep(backoff)
 
@@ -504,8 +506,8 @@ def main():
     csv_writer = ThreadSafeWriter(output_csv, fieldnames)
     
     # Parallel processing settings
-    batch_size = 10
-    max_workers = 5
+    batch_size = 12
+    max_workers = 6
     total_batches = (len(urls) + batch_size - 1) // batch_size  # Ceiling division
     
     logging.info(f"Processing URLs in {total_batches} batches with {max_workers} parallel workers")
