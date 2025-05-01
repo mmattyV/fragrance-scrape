@@ -450,7 +450,7 @@ def process_url_batch(urls, csv_writer, start_idx, total_urls):
                 logging.info(f"Data from {url} written to CSV")
             
             # Moderate random delay between requests within a worker
-            delay = random.uniform(2.5, 5)  # Balanced delay between original and previous modification
+            delay = random.uniform(4, 7)  # Balanced delay between original and previous modification
             logging.info(f"Waiting {delay:.2f} seconds before next request...")
             time.sleep(delay)
             
@@ -506,8 +506,8 @@ def main():
     csv_writer = ThreadSafeWriter(output_csv, fieldnames)
     
     # Parallel processing settings
-    batch_size = 12
-    max_workers = 6
+    batch_size = 10
+    max_workers = 5
     total_batches = (len(urls) + batch_size - 1) // batch_size  # Ceiling division
     
     logging.info(f"Processing URLs in {total_batches} batches with {max_workers} parallel workers")
@@ -557,7 +557,7 @@ def main():
         
         # Pause between batches to avoid being rate-limited
         if batch_idx < total_batches - 1:  # Skip pause after the last batch
-            pause_duration = random.uniform(2, 5)  # More conservative to avoid detection
+            pause_duration = random.uniform(4, 7)  # More conservative to avoid detection
             logging.info(f"Pausing for {pause_duration:.2f} seconds between batches...")
             time.sleep(pause_duration)
     
