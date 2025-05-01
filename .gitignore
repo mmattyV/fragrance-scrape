@@ -1,2 +1,6 @@
-env/
+.env
 __pycache__
+brand_scraper.log
+scraper.log
+scraper_old.log
+test_scraper.log

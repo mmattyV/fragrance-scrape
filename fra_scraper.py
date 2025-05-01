@@ -9,6 +9,10 @@ import cloudscraper
 from bs4 import BeautifulSoup
 from tqdm import tqdm
 import logging
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 # Configure logging
 logging.basicConfig(
@@ -19,9 +23,9 @@ logging.basicConfig(
 )
 
 # Configure SmartProxy
-SMARTPROXY_USERNAME = 'sphisy7zqk'
-SMARTPROXY_PASSWORD = 'Xmz7dkGgV2+1glKwx5'
-SMARTPROXY_ENDPOINT = 'gate.decodo.com:7000'
+SMARTPROXY_USERNAME = os.getenv('SMARTPROXY_USERNAME')
+SMARTPROXY_PASSWORD = os.getenv('SMARTPROXY_PASSWORD')
+SMARTPROXY_ENDPOINT = os.getenv('SMARTPROXY_ENDPOINT')
 PROXY_URL = f"http://{SMARTPROXY_USERNAME}:{SMARTPROXY_PASSWORD}@{SMARTPROXY_ENDPOINT}"
 PROXIES = {
     'http': PROXY_URL,
@@ -33,7 +37,6 @@ scraper = cloudscraper.create_scraper(
     browser={'browser': 'chrome','platform': 'darwin','mobile': False}
 )
 scraper.proxies = PROXIES
-
 
 # 2) Grab CloudScraper's existing HTTPS adapter
 cf_adapter = scraper.get_adapter("https://")
