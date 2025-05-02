@@ -210,7 +210,7 @@ def process_brands_in_batches(brand_links, existing_links, batch_size=6, max_wor
             print(f"Batch {batch_idx+1}/{len(batches)}: Added {len(new_links_from_batch)} new perfume links")
         
         # Random sleep between batches to be nice to the server
-        sleep_time = random.uniform(5, 10)
+        sleep_time = random.uniform(2, 5)
         time.sleep(sleep_time)
     
     return all_new_links
@@ -261,8 +261,8 @@ def main():
     
     # You can define the number of brands to process per batch
     # and the maximum number of parallel workers
-    batch_size = 6
-    max_workers = 3
+    batch_size = 2
+    max_workers = 1
     
     # Process brands in parallel batches
     all_new_links = process_brands_in_batches(brands_to_process, existing_links, batch_size, max_workers)
